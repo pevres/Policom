@@ -53,7 +53,7 @@ st.markdown("""
 if 'session_history' not in st.session_state:
     st.session_state['session_history'] = []
 
-# 3. Tentativo di caricamento automatico della chiave da st.secrets
+# 3. Lettura sicura della chiave dai secrets di Streamlit (Cloud o locale)
 default_api_key = ""
 try:
     if "GEMINI_API_KEY" in st.secrets:
@@ -64,6 +64,13 @@ except Exception:
 # 4. Barra Laterale (Sidebar) per la configurazione dell'API Key e Storico Sessioni
 with st.sidebar:
     st.header("⚙️ Configurazione IA")
+
+    # Controllo di debug visivo per i secrets
+    if default_api_key:
+        st.success("🔒 Chiave rilevata nei Secrets di Streamlit!")
+    else:
+        st.info("💡 Nessun secret rilevato. Inserisci la chiave manualmente o configurala su Streamlit Cloud.")
+
     api_key = st.text_input(
         "Inserisci Gemini API Key:",
         value=default_api_key,
@@ -76,7 +83,7 @@ with st.sidebar:
     if api_key:
         st.success("🟢 API Key attiva: Pronto per la campagna.")
     else:
-        st.info("🟡 Inserisci la chiave API per attivare gli strumenti IA.")
+        st.error("🔴 Inserisci o configura una chiave API valida per attivare gli strumenti IA.")
 
     st.markdown("---")
     st.header("🗂️ Storico Sessioni")
@@ -110,11 +117,14 @@ with st.sidebar:
 # 5. Funzioni di chiamata alle API di Gemini e di log
 def call_gemini(prompt, system_instruction=""):
     """Funzione centralizzata per interrogare Gemini 3.8 Flash."""
-    if not api_key:
+    # Usa la chiave attiva (dalla sidebar o dai secrets)
+    current_key = api_key or default_api_key
+
+    if not current_key:
         return "⚠️ Errore: Inserisci la tua Gemini API Key (o configurala nei secrets) per generare i contenuti."
 
     try:
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(api_key=current_key)
 
         config = {}
         if system_instruction:
