@@ -1,7 +1,9 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from google import genai
+import datetime
 
 # 1. Configurazione della pagina
 st.set_page_config(
@@ -10,39 +12,130 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Barra Laterale (Sidebar) per la configurazione dell'API Key
+# 2. CSS personalizzato per la piena compatibilità Mobile / Tablet / Desktop (Responsive Design)
+st.markdown("""
+    <style>
+    /* Ottimizzazione generale dei contenitori per schermi piccoli */
+    @media (max-width: 768px) {
+        .stColumns {
+            display: flex;
+            flex-direction: column !important;
+        }
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            margin-bottom: 1rem;
+        }
+    }
+
+    /* Riduzione dei margini superiori su mobile per ottimizzare lo spazio */
+    div.block-container {
+        padding-top: 1.5rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    /* Adattamento dei pulsanti a tutta larghezza sui piccoli schermi */
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    /* Miglioramento della leggibilità delle schede Tab su mobile */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        overflow-x: auto;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Inizializzazione dello session_state per il registro delle sessioni
+if 'session_history' not in st.session_state:
+    st.session_state['session_history'] = []
+
+# 3. Recupero sicuro della chiave dai Secrets di Streamlit (Cloud o locale)
+# Usiamo st.secrets.get per evitare crash se il file secrets.toml non esiste
+secret_key = ""
+try:
+    if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+        secret_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    pass
+
+# 4. Barra Laterale (Sidebar) per la configurazione dell'API Key e Storico Sessioni
 with st.sidebar:
     st.header("⚙️ Configurazione IA")
-    api_key = st.text_input(
-        "Inserisci Gemini API Key:", 
-        type="password", 
-        key="gemini_political_key", 
-        help="Ottienila gratuitamente su Google AI Studio."
+
+    if secret_key:
+        st.success("🔒 Chiave rilevata nei Secrets di Streamlit!")
+    else:
+        st.info("💡 Nessun secret rilevato. Inserisci la chiave manualmente.")
+
+    # Campo di input per l'API key (pre-compilato con i secrets se disponibili)
+    api_key_input = st.text_input(
+        "Inserisci Gemini API Key:",
+        value=secret_key,
+        type="password",
+        key="gemini_political_key",
+        help="Caricata automaticamente da secrets.toml / Streamlit Cloud o inseribile manualmente."
     )
-    
+
     st.markdown("---")
-    if api_key:
+    # Definiamo la chiave effettiva da usare (priorità all'input manuale, altrimenti i secrets)
+    active_api_key = api_key_input if api_key_input else secret_key
+
+    if active_api_key:
         st.success("🟢 API Key attiva: Pronto per la campagna.")
     else:
-        st.info("🟡 Inserisci la chiave API per attivare gli strumenti IA.")
-        
+        st.error("🔴 Inserisci o configura una chiave API valida per attivare gli strumenti IA.")
+
+    st.markdown("---")
+    st.header("🗂️ Storico Sessioni")
+    active_count = len(st.session_state['session_history'])
+    st.metric("Interazioni Salvate", active_count)
+
+    if active_count > 0:
+        md_export = "# 🏛️ Registro Sessioni - AI Political Marketing Suite\n\n"
+        for idx, item in enumerate(st.session_state['session_history'], 1):
+            md_export += f"## Sessione #{idx} - {item['type']}\n"
+            md_export += f"**Timestamp:** {item['timestamp']}\n\n"
+            md_export += f"**Input / Tema:** {item['input']}\n\n"
+            md_export += f"**Output Generato:**\n{item['output']}\n\n---\n\n"
+
+        st.download_button(
+            label="📥 Scarica Storico (.md)",
+            data=md_export,
+            file_name=f"report_sessioni_politiche_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+            mime="text/markdown",
+            use_container_width=True
+        )
+
+        if st.button("🗑️ Pulisci Storico", use_container_width=True):
+            st.session_state['session_history'] = []
+            st.rerun()
+
+    st.markdown("---")
     st.markdown("### 📌 Informazioni")
     st.markdown("Suite strategica per la comunicazione politica, l'analisi dell'elettorato e la preparazione ai dibattiti basata su Google Gemini 3.8 Flash.")
 
-# 3. Funzioni di chiamata alle API di Gemini
+# 5. Funzione centralizzata di chiamata alle API di Gemini
 def call_gemini(prompt, system_instruction=""):
     """Funzione centralizzata per interrogare Gemini 3.8 Flash."""
-    if not api_key:
-        return "⚠️ Errore: Inserisci la tua Gemini API Key nella barra laterale per generare i contenuti."
-    
+    # Rileva la chiave attiva al momento della chiamata
+    current_key = api_key_input if api_key_input else secret_key
+
+    if not current_key:
+        return "⚠️ Errore: Inserisci la tua Gemini API Key (o configurala nei secrets) per generare i contenuti."
+
     try:
-        client = genai.Client(api_key=api_key)
-        
-        # Configurazione opzionale del System Instruction
+        # Inizializzazione client con l'SDK google-genai
+        client = genai.Client(api_key=current_key)
+
         config = {}
         if system_instruction:
             config['system_instruction'] = system_instruction
-            
+
         response = client.models.generate_content(
             model='gemini-3.8-flash',
             contents=prompt,
@@ -52,23 +145,32 @@ def call_gemini(prompt, system_instruction=""):
     except Exception as e:
         return f"⚠️ Errore durante la chiamata a Google Gemini: {str(e)}"
 
-# 4. Header Principale
+def log_session(session_type, input_text, output_text):
+    """Registra l'interazione nello session_state."""
+    st.session_state['session_history'].append({
+        "type": session_type,
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "input": input_text,
+        "output": output_text
+    })
+
+# 6. Header Principale
 st.title("🏛️ AI Political Marketing Suite")
 st.markdown("Strumenti avanzati di comunicazione strategica, analisi dell'elettorato e preparazione del candidato.")
 
-# 5. Organizzazione in Tab dei 4 Moduli
+# 7. Organizzazione in Tab dei 4 Moduli
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🎙️ Speechwriter & Social", 
-    "⚔️ Simulatore Dibattiti", 
-    "📊 Sentiment Elettorale", 
-    "🎯 Generatore Slogan"
+    "🎙️ Speechwriter",
+    "⚔️ Dibattiti",
+    "📊 Sentiment",
+    "🎯 Slogan"
 ])
 
 # --- TAB 1: SPEECHWRITER & SOCIAL POST ---
 with tab1:
     st.header("🎙️ Generatore di Discorsi e Post Social")
     st.markdown("Crea messaggi mirati calibrati sul target di elettori e sul tono di voce desiderato.")
-    
+
     col1, col2 = st.columns(2)
     with col1:
         topic = st.text_input("Tema principale del messaggio:", placeholder="Es. Transizione ecologica e incentivi per le PMI")
@@ -76,7 +178,7 @@ with tab1:
     with col2:
         content_type = st.selectbox("Formato del Contenuto:", ["Post per Instagram / Facebook", "Comunicato Stampa", "Discorso di Piazza (2 minuti)", "Punto programmatico sintetico"])
         tone = st.selectbox("Tono di Voce:", ["Ispirazionale & Visionario", "Pragmatico & Concreto", "Battagliero & Determinato", "Empatico & Rassicurante"])
-        
+
     if st.button("🚀 Genera Messaggio", use_container_width=True):
         if not topic:
             st.warning("Inserisci un tema principale.")
@@ -92,18 +194,19 @@ with tab1:
                 result = call_gemini(user_prompt, system_prompt)
                 st.subheader("Risultato Generato:")
                 st.markdown(result)
+                log_session(f"Speechwriter ({content_type})", topic, result)
 
 # --- TAB 2: SIMULATORE DI DIBATTITI ---
 with tab2:
     st.header("⚔️ Simulatore di Dibattiti e Q&A Trainer")
     st.markdown("Mettiti alla prova: l'IA interpreterà un giornalista aggressivo o un avversario politico che ti mette in difficoltà sui punti deboli.")
-    
+
     col_q1, col_q2 = st.columns(2)
     with col_q1:
         candidate_stance = st.text_input("La tua posizione sul tema caldo:", placeholder="Es. Favorevole alla costruzione del termovalorizzatore")
     with col_q2:
         interviewer_style = st.selectbox("Profilo dell'Intervistatore:", ["Giornalista d'inchiesta ostile", "Avversario politico polemico", "Cittadino scettico e pragmatico"])
-        
+
     if st.button("🎤 Mettimi alla prova (Genera Domanda Scomoda)", use_container_width=True):
         system_prompt = f"Sei un {interviewer_style} durante un dibattito televisivo di primissima serata."
         user_prompt = f"""
@@ -113,11 +216,11 @@ with tab2:
         with st.spinner("L'intervistatore sta preparando la domanda..."):
             question = call_gemini(user_prompt, system_prompt)
             st.session_state['current_question'] = question
-            
+
     if 'current_question' in st.session_state:
         st.markdown("---")
         st.error(f"**Domanda dell'Intervistatore:** {st.session_state['current_question']}")
-        
+
         user_reply = st.text_area("La tua risposta (come candidato):", placeholder="Scrivi qui la tua replica...")
         if st.button("⚖️ Valuta la mia risposta"):
             if not user_reply:
@@ -127,7 +230,7 @@ with tab2:
                 Valuta la risposta del candidato alla domanda scomoda.
                 Domanda: {st.session_state['current_question']}
                 Risposta del candidato: {user_reply}
-                
+
                 Fai un'analisi costruttiva:
                 1. Efficacia persuasiva (da 1 a 10)
                 2. Punti di forza della risposta
@@ -138,16 +241,17 @@ with tab2:
                     feedback = call_gemini(eval_prompt, "Sei un coach di comunicazione politica ed ex spin doctor.")
                     st.success("### 📋 Valutazione dello Spin Doctor")
                     st.markdown(feedback)
+                    log_session("Simulatore Dibattito", st.session_state['current_question'], feedback)
 
 # --- TAB 3: SENTIMENT ELETTORALE ---
 with tab3:
     st.header("📊 Analisi del Sentiment e Temi dell'Elettorato")
     st.markdown("Incolla un blocco di commenti raccolti sui social o opinioni dei cittadini per estrarre le priorità e il sentiment.")
-    
+
     sample_comments = """Non se ne può più delle buche in città, nessuno fa niente!\nIl nuovo piano trasporti mi sembra un'ottima idea per i giovani.\nTasse troppo alte, le imprese locali stanno morendo.\nFinalmente un candidato che parla chiaro di sicurezza e lavoro."""
-    
+
     comments_input = st.text_area("Inserisci i commenti dei cittadini (uno per riga):", value=sample_comments, height=150)
-    
+
     if st.button("📈 Analizza Commenti e Priorità", use_container_width=True):
         if not comments_input:
             st.warning("Inserisci dei testi da analizzare.")
@@ -156,7 +260,7 @@ with tab3:
             prompt = f"""
             Analizza i seguenti commenti dei cittadini:
             {comments_input}
-            
+
             Estrai:
             1. I 3 temi o problemi più sentiti dall'elettorato.
             2. La percentuale stimata di Sentiment (Positivo, Neutro, Negativo).
@@ -165,15 +269,16 @@ with tab3:
             with st.spinner("Analisi dei dati in corso..."):
                 analysis_result = call_gemini(prompt, system_prompt)
                 st.markdown(analysis_result)
+                log_session("Analisi Sentiment", "Analisi batch commenti", analysis_result)
 
 # --- TAB 4: CREATORE DI SLOGAN ---
 with tab4:
     st.header("🎯 Generatore di Slogan ed Efficacia della Campagna")
     st.markdown("Sintetizza i valori del tuo programma in slogan brevi, incisivi e memorabili per manifesti e social.")
-    
+
     core_values = st.text_input("Valori o obiettivi chiave della campagna:", placeholder="Es. Futuro, lavoro locale, ambiente, rinnovamento")
     slogan_style = st.selectbox("Stile dello Slogan:", ["Emozionale & Identitario", "Breve & Memorabile (stile tormentone)", "Pragmatico & Risolutivo", "Provocatorio & di Rottura"])
-    
+
     if st.button("✨ Genera Slogan", use_container_width=True):
         if not core_values:
             st.warning("Inserisci i valori chiave.")
@@ -187,4 +292,4 @@ with tab4:
             with st.spinner("Creazione slogan in corso..."):
                 slogans = call_gemini(prompt, system_prompt)
                 st.markdown(slogans)
-
+                log_session("Generatore Slogan", core_values, slogans)
