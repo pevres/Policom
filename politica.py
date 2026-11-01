@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -53,11 +54,12 @@ st.markdown("""
 if 'session_history' not in st.session_state:
     st.session_state['session_history'] = []
 
-# 3. Lettura sicura della chiave dai secrets di Streamlit (Cloud o locale)
-default_api_key = ""
+# 3. Recupero sicuro della chiave dai Secrets di Streamlit (Cloud o locale)
+# Usiamo st.secrets.get per evitare crash se il file secrets.toml non esiste
+secret_key = ""
 try:
-    if "GEMINI_API_KEY" in st.secrets:
-        default_api_key = st.secrets["GEMINI_API_KEY"]
+    if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+        secret_key = st.secrets["GEMINI_API_KEY"]
 except Exception:
     pass
 
@@ -65,22 +67,25 @@ except Exception:
 with st.sidebar:
     st.header("⚙️ Configurazione IA")
 
-    # Controllo di debug visivo per i secrets
-    if default_api_key:
+    if secret_key:
         st.success("🔒 Chiave rilevata nei Secrets di Streamlit!")
     else:
-        st.info("💡 Nessun secret rilevato. Inserisci la chiave manualmente o configurala su Streamlit Cloud.")
+        st.info("💡 Nessun secret rilevato. Inserisci la chiave manualmente.")
 
-    api_key = st.text_input(
+    # Campo di input per l'API key (pre-compilato con i secrets se disponibili)
+    api_key_input = st.text_input(
         "Inserisci Gemini API Key:",
-        value=default_api_key,
+        value=secret_key,
         type="password",
         key="gemini_political_key",
         help="Caricata automaticamente da secrets.toml / Streamlit Cloud o inseribile manualmente."
     )
 
     st.markdown("---")
-    if api_key:
+    # Definiamo la chiave effettiva da usare (priorità all'input manuale, altrimenti i secrets)
+    active_api_key = api_key_input if api_key_input else secret_key
+
+    if active_api_key:
         st.success("🟢 API Key attiva: Pronto per la campagna.")
     else:
         st.error("🔴 Inserisci o configura una chiave API valida per attivare gli strumenti IA.")
@@ -114,16 +119,17 @@ with st.sidebar:
     st.markdown("### 📌 Informazioni")
     st.markdown("Suite strategica per la comunicazione politica, l'analisi dell'elettorato e la preparazione ai dibattiti basata su Google Gemini 3.8 Flash.")
 
-# 5. Funzioni di chiamata alle API di Gemini e di log
+# 5. Funzione centralizzata di chiamata alle API di Gemini
 def call_gemini(prompt, system_instruction=""):
     """Funzione centralizzata per interrogare Gemini 3.8 Flash."""
-    # Usa la chiave attiva (dalla sidebar o dai secrets)
-    current_key = api_key or default_api_key
+    # Rileva la chiave attiva al momento della chiamata
+    current_key = api_key_input if api_key_input else secret_key
 
     if not current_key:
         return "⚠️ Errore: Inserisci la tua Gemini API Key (o configurala nei secrets) per generare i contenuti."
 
     try:
+        # Inizializzazione client con l'SDK google-genai
         client = genai.Client(api_key=current_key)
 
         config = {}
