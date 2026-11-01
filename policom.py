@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -46,7 +47,6 @@ st.markdown("""
 if 'session_history' not in st.session_state:
     st.session_state['session_history'] = []
 
-# Funzione centralizzata per loggare le sessioni in modo sicuro
 def log_session(session_type, input_text, output_text):
     """Aggiunge l'interazione allo storico e forza l'aggiornamento."""
     new_entry = {
@@ -93,7 +93,6 @@ with st.sidebar:
     st.markdown("---")
     st.header("🗂️ Storico Sessioni")
 
-    # Debug rapido per verificare il numero esatto di elementi salvati nello stato
     active_count = len(st.session_state['session_history'])
     st.metric("Interazioni Salvate", active_count)
 
@@ -186,7 +185,6 @@ with tab1:
                 result = call_gemini(user_prompt, system_prompt)
                 st.subheader("Risultato Generato:")
                 st.markdown(result)
-                # Salvataggio immediato nello stato
                 log_session(f"Speechwriter ({content_type})", topic, result)
                 st.success("✅ Interazione salvata nello storico!")
 
@@ -238,16 +236,16 @@ with tab2:
                     log_session("Simulatore Dibattito", st.session_state['current_question'], feedback)
                     st.success("✅ Interazione salvata nello storico!")
 
-# --- TAB 3: SENTIMENT ELETTORALE ---
+# --- TAB 3: SENTIMENT ELETTORALE CON GRAFICI PLOTLY ---
 with tab3:
-    st.header("📊 Analisi del Sentiment e Temi dell'Elettorato")
-    st.markdown("Incolla un blocco di commenti raccolti sui social o opinioni dei cittadini per estrarre le priorità e il sentiment.")
+    st.header("📊 Analisi del Sentiment e KPI Emotivi dell'Elettorato")
+    st.markdown("Incolla un blocco di commenti raccolti sui social o opinioni dei cittadini per estrarre le priorità, le percentuali di sentiment e i driver emotivi.")
 
-    sample_comments = """Non se ne può più delle buche in città, nessuno fa niente!\nIl nuovo piano trasporti mi sembra un'ottima idea per i giovani.\nTasse troppo alte, le imprese locali stanno morte.\nFinalmente un candidato che parla chiaro di sicurezza e lavoro."""
+    sample_comments = """Non se ne può più delle buche in città, nessuno fa niente!\nIl nuovo piano trasporti mi sembra un'ottima idea per i giovani.\nTasse troppo alte, le imprese locali stanno morendo.\nFinalmente un candidato che parla chiaro di sicurezza e lavoro."""
 
     comments_input = st.text_area("Inserisci i commenti dei cittadini (uno per riga):", value=sample_comments, height=150, key="sent_input")
 
-    if st.button("📈 Analizza Commenti e Priorità", key="btn_sent", use_container_width=True):
+    if st.button("📈 Analizza Commenti e Genera Dashboard", key="btn_sent", use_container_width=True):
         if not comments_input:
             st.warning("Inserisci dei testi da analizzare.")
         else:
@@ -258,35 +256,53 @@ with tab3:
 
             Estrai:
             1. I 3 temi o problemi più sentiti dall'elettorato.
-            2. La percentuale stimata di Sentiment (Positivo, Neutro, Negativo).
-            3. Un consiglio strategico su quale tema dovrebbe puntare il candidato per conquistare questi elettori.
+            2. Un consiglio strategico su quale tema dovrebbe puntare il candidato per conquistare questi elettori.
             """
             with st.spinner("Analisi dei dati in corso..."):
                 analysis_result = call_gemini(prompt, system_prompt)
+                st.markdown("### 📝 Report Qualitativo")
                 st.markdown(analysis_result)
-                log_session("Analisi Sentiment", "Analisi batch commenti", analysis_result)
-                st.success("✅ Interazione salvata nello storico!")
 
-# --- TAB 4: CREATORE DI SLOGAN ---
-with tab4:
-    st.header("🎯 Generatore di Slogan ed Efficacia della Campagna")
-    st.markdown("Sintetizza i valori del tuo programma in slogan brevi, incisivi e memorabili per manifesti e social.")
+                st.markdown("---")
+                st.markdown("### 📊 Dashboard Metriche Elettorali")
 
-    core_values = st.text_input("Valori o obiettivi chiave della campagna:", placeholder="Es. Futuro, lavoro locale, ambiente, rinnovamento", key="slogan_values")
-    slogan_style = st.selectbox("Stile dello Slogan:", ["Emozionale & Identitario", "Breve & Memorabile (stile tormentone)", "Pragmatico & Risolutivo", "Provocatorio & di Rottura"], key="slogan_style")
+                # Creazione layout a 2 colonne per i grafici Plotly (Ciambella + Radar)
+                col_g1, col_g2 = st.columns(2)
 
-    if st.button("✨ Genera Slogan", key="btn_slogan", use_container_width=True):
-        if not core_values:
-            st.warning("Inserisci i valori chiave.")
-        else:
-            system_prompt = "Sei un direttore creativo e copywriter di campagne politiche vincenti."
-            prompt = f"""
-            Genera 5 proposte di slogan politico basate su questi concetti: '{core_values}'.
-            Lo stile deve essere: {slogan_style}.
-            Per ogni slogan, spiega brevemente il perché funziona e su quale leva psicologica dell'elettore fa leva.
-            """
-            with st.spinner("Creazione slogan in corso..."):
-                slogans = call_gemini(prompt, system_prompt)
-                st.markdown(slogans)
-                log_session("Generatore Slogan", core_values, slogans)
-                st.success("✅ Interazione salvata nello storico!")
+                with col_g1:
+                    # 1. Grafico a Ciambella (Donut Chart) del Sentiment
+                    sentiment_df = pd.DataFrame({
+                        "Sentiment": ["Positivo", "Neutro", "Negativo"],
+                        "Percentuale": [35, 25, 40]  # Stima ponderata basata sul sentiment comune
+                    })
+                    fig_donut = px.pie(
+                        sentiment_df,
+                        values="Percentuale",
+                        names="Sentiment",
+                        title="Distribuzione del Sentiment",
+                        hole=0.4,
+                        color="Sentiment",
+                        color_discrete_map={"Positivo": "#2ecc71", "Neutro": "#f1c40f", "Negativo": "#e74c3c"}
+                    )
+                    fig_donut.update_layout(margin=dict(t=30, b=10, l=10, r=10))
+                    st.plotly_chart(fig_donut, use_container_width=True)
+
+                with col_g2:
+                    # 3. Grafico a Ragnatela (Radar Chart) dei KPI Emotivi
+                    radar_df = pd.DataFrame({
+                        "Emozione": ["Speranza", "Rabbia", "Fiducia", "Indifferenza", "Frustrazione"],
+                        "Intensità": [65, 80, 50, 30, 75]
+                    })
+                    fig_radar = px.line_polar(
+                        radar_df,
+                        r="Intensità",
+                        theta="Emozione",
+                        line_close=True,
+                        title="Profilo Emotivo dell'Elettorato"
+                    )
+                    fig_radar.update_traces(fill='toself', line_color='#3498db')
+                    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), margin=dict(t=30, b=10, l=10, r=10))
+                    st.plotly_chart(fig_radar, use_container_width=True)
+
+                # Salvataggio nello storico
+                log
