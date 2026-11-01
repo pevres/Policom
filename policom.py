@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -48,7 +47,7 @@ if 'session_history' not in st.session_state:
     st.session_state['session_history'] = []
 
 def log_session(session_type, input_text, output_text):
-    """Aggiunge l'interazione allo storico e forza l'aggiornamento."""
+    """Aggiunge l'interazione allo storico."""
     new_entry = {
         "type": session_type,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -266,14 +265,12 @@ with tab3:
                 st.markdown("---")
                 st.markdown("### 📊 Dashboard Metriche Elettorali")
 
-                # Creazione layout a 2 colonne per i grafici Plotly (Ciambella + Radar)
                 col_g1, col_g2 = st.columns(2)
 
                 with col_g1:
-                    # 1. Grafico a Ciambella (Donut Chart) del Sentiment
                     sentiment_df = pd.DataFrame({
                         "Sentiment": ["Positivo", "Neutro", "Negativo"],
-                        "Percentuale": [35, 25, 40]  # Stima ponderata basata sul sentiment comune
+                        "Percentuale": [35, 25, 40]
                     })
                     fig_donut = px.pie(
                         sentiment_df,
@@ -288,7 +285,6 @@ with tab3:
                     st.plotly_chart(fig_donut, use_container_width=True)
 
                 with col_g2:
-                    # 3. Grafico a Ragnatela (Radar Chart) dei KPI Emotivi
                     radar_df = pd.DataFrame({
                         "Emozione": ["Speranza", "Rabbia", "Fiducia", "Indifferenza", "Frustrazione"],
                         "Intensità": [65, 80, 50, 30, 75]
@@ -304,5 +300,29 @@ with tab3:
                     fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), margin=dict(t=30, b=10, l=10, r=10))
                     st.plotly_chart(fig_radar, use_container_width=True)
 
-                # Salvataggio nello storico
-                log
+                log_session("Analisi Sentiment & Dashboard", "Analisi batch commenti e metriche", analysis_result)
+                st.success("✅ Interazione e metriche salvate nello storico!")
+
+# --- TAB 4: CREATORE DI SLOGAN ---
+with tab4:
+    st.header("🎯 Generatore di Slogan ed Efficacia della Campagna")
+    st.markdown("Sintetizza i valori del tuo programma in slogan brevi, incisivi e memorabili per manifesti e social.")
+
+    core_values = st.text_input("Valori o obiettivi chiave della campagna:", placeholder="Es. Futuro, lavoro locale, ambiente, rinnovamento", key="slogan_values")
+    slogan_style = st.selectbox("Stile dello Slogan:", ["Emozionale & Identitario", "Breve & Memorabile (stile tormentone)", "Pragmatico & Risolutivo", "Provocatorio & di Rottura"], key="slogan_style")
+
+    if st.button("✨ Genera Slogan", key="btn_slogan", use_container_width=True):
+        if not core_values:
+            st.warning("Inserisci i valori chiave.")
+        else:
+            system_prompt = "Sei un direttore creativo e copywriter di campagne politiche vincenti."
+            prompt = f"""
+            Genera 5 proposte di slogan politico basate su questi concetti: '{core_values}'.
+            Lo stile deve essere: {slogan_style}.
+            Per ogni slogan, spiega brevemente il perché funziona e su quale leva psicologica dell'elettore fa leva.
+            """
+            with st.spinner("Creazione slogan in corso..."):
+                slogans = call_gemini(prompt, system_prompt)
+                st.markdown(slogans)
+                log_session("Generatore Slogan", core_values, slogans)
+                st.success("✅ Interazione salvata nello storico!")
