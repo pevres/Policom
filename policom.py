@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -22,6 +23,10 @@ def check_password():
         return True
 
     st.subheader("🔒 Accesso Riservato - Policom")
+
+    # Campo utente fisso per evitare che il browser confonda il login per una registrazione
+    st.text_input("Utente:", value="Amministratore", disabled=True, key="login_user_fixed")
+
     entered_password = st.text_input(
         "Inserisci la password di accesso:",
         type="password",
