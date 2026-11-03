@@ -10,6 +10,39 @@ st.set_page_config(
     page_icon="🏛️",
     layout="wide"
 )
+ --- 1. SISTEMA DI AUTENTICAZIONE PASSWORD ---
+def check_password():
+    """Restituisce True se l'utente ha inserito la password corretta."""
+    if "APP_PASSWORD" not in st.secrets:
+        st.error("⚠️ Errore: Manca la password (APP_PASSWORD) nei Secrets di Streamlit.")
+        return False
+
+    def password_entered():
+        if st.session_state["password_input"] == st.secrets["APP_PASSWORD"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password_input"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if st.session_state.get("password_correct", False):
+        return True
+
+    st.subheader("🔒 Accesso Riservato - Rhetorica")
+    st.text_input(
+        "Inserisci la password di accesso:",
+        type="password",
+        on_change=password_entered,
+        key="password_input"
+    )
+
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("😕 Password errata. Riprova.")
+
+    return False
+
+# Blocca l'app se il login non è superato
+if not check_password():
+    st.stop()
 
 # 2. CSS personalizzato per la piena compatibilità Mobile / Tablet / Desktop (Responsive Design)
 st.markdown("""
