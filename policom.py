@@ -12,33 +12,33 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- 1. SISTEMA DI AUTENTICAZIONE PASSWORD SICURO ---
+# --- 1. SISTEMA DI AUTENTICAZIONE PASSWORD ---
 def check_password():
     """Restituisce True se l'utente ha inserito la password corretta."""
     if "APP_PASSWORD" not in st.secrets:
         st.error("⚠️ Errore: Manca la password (APP_PASSWORD) nei Secrets di Streamlit.")
         return False
 
+    def password_entered():
+        if st.session_state["password_input"] == st.secrets["APP_PASSWORD"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password_input"]
+        else:
+            st.session_state["password_correct"] = False
+
     if st.session_state.get("password_correct", False):
         return True
 
     st.subheader("🔒 Accesso Riservato - Policom")
-
-    # Campo utente fisso per evitare che il browser confonda il login per una registrazione
-    st.text_input("Utente:", value="Amministratore", disabled=True, key="login_user_fixed")
-
-    entered_password = st.text_input(
+    st.text_input(
         "Inserisci la password di accesso:",
         type="password",
-        key="login_password_input"
+        on_change=password_entered,
+        key="password_input"
     )
 
-    if st.button("Accedi", use_container_width=True):
-        if entered_password == st.secrets["APP_PASSWORD"]:
-            st.session_state["password_correct"] = True
-            st.rerun()
-        else:
-            st.error("😕 Password errata. Riprova.")
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("😕 Password errata. Riprova.")
 
     return False
 
