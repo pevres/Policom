@@ -27,7 +27,7 @@ def check_password():
     if st.session_state.get("password_correct", False):
         return True
 
-    st.subheader("🔒 Accesso Riservato - Rhetorica")
+    st.subheader("🔒 Accesso Riservato - Policom")
     st.text_input(
         "Inserisci la password di accesso:",
         type="password",
