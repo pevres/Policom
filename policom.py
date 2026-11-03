@@ -10,7 +10,7 @@ st.set_page_config(
     page_icon="🏛️",
     layout="wide"
 )
- --- 1. SISTEMA DI AUTENTICAZIONE PASSWORD ---
+--- 1. SISTEMA DI AUTENTICAZIONE PASSWORD ---
 def check_password():
     """Restituisce True se l'utente ha inserito la password corretta."""
     if "APP_PASSWORD" not in st.secrets:
