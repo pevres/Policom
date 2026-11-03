@@ -4,39 +4,36 @@ import plotly.express as px
 from google import genai
 import datetime
 
-# 1. Configurazione della pagina
+# 1. Configurazione della pagina (deve essere la prima chiamata Streamlit)
 st.set_page_config(
     page_title="AI Political Marketing Suite",
     page_icon="🏛️",
     layout="wide"
 )
-# --- 1. SISTEMA DI AUTENTICAZIONE PASSWORD ---
+
+# --- 1. SISTEMA DI AUTENTICAZIONE PASSWORD SICURO ---
 def check_password():
     """Restituisce True se l'utente ha inserito la password corretta."""
     if "APP_PASSWORD" not in st.secrets:
         st.error("⚠️ Errore: Manca la password (APP_PASSWORD) nei Secrets di Streamlit.")
         return False
 
-    def password_entered():
-        if st.session_state["password_input"] == st.secrets["APP_PASSWORD"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password_input"]
-        else:
-            st.session_state["password_correct"] = False
-
     if st.session_state.get("password_correct", False):
         return True
 
     st.subheader("🔒 Accesso Riservato - Policom")
-    st.text_input(
+    entered_password = st.text_input(
         "Inserisci la password di accesso:",
         type="password",
-        on_change=password_entered,
-        key="password_input"
+        key="login_password_input"
     )
 
-    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("😕 Password errata. Riprova.")
+    if st.button("Accedi", use_container_width=True):
+        if entered_password == st.secrets["APP_PASSWORD"]:
+            st.session_state["password_correct"] = True
+            st.rerun()
+        else:
+            st.error("😕 Password errata. Riprova.")
 
     return False
 
@@ -44,7 +41,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# 2. CSS personalizzato per la piena compatibilità Mobile / Tablet / Desktop (Responsive Design)
+# 2. CSS personalizzato per la piena compatibilità Mobile / Tablet / Desktop
 st.markdown("""
     <style>
     @media (max-width: 768px) {
@@ -175,7 +172,12 @@ def call_gemini(prompt, system_instruction=""):
         )
         return response.text
     except Exception as e:
-        return f"⚠️ Errore durante la chiamata a Google Gemini: {str(e)}"
+        err_msg = str(e)
+        if "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg:
+            return "⚠️ **Limite giornaliero raggiunto (Quota Exceeded)**: Hai esaurito le richieste gratuite disponibili per oggi sul tuo piano Gemini API. Riprova più tardi o usa un'altra chiave."
+        elif "503" in err_msg or "UNAVAILABLE" in err_msg:
+            return "⚠️ **Server sovraccarichi (503)**: Google sta riscontrando un picco di traffico temporaneo. Riprova tra qualche istante."
+        return f"⚠️ Errore durante la chiamata a Google Gemini: {err_msg}"
 
 # 7. Header Principale
 st.title("🏛️ AI Political Marketing Suite")
@@ -217,8 +219,9 @@ with tab1:
                 result = call_gemini(user_prompt, system_prompt)
                 st.subheader("Risultato Generato:")
                 st.markdown(result)
-                log_session(f"Speechwriter ({content_type})", topic, result)
-                st.success("✅ Interazione salvata nello storico!")
+                if "⚠️ Errore" not in result:
+                    log_session(f"Speechwriter ({content_type})", topic, result)
+                    st.success("✅ Interazione salvata nello storico!")
 
 # --- TAB 2: SIMULATORE DI DIBATTITI ---
 with tab2:
@@ -241,7 +244,7 @@ with tab2:
             question = call_gemini(user_prompt, system_prompt)
             st.session_state['current_question'] = question
 
-    if 'current_question' in st.session_state:
+    if 'current_question' in st.session_state and "⚠️ Errore" not in st.session_state['current_question']:
         st.markdown("---")
         st.error(f"**Domanda dell'Intervistatore:** {st.session_state['current_question']}")
 
@@ -265,8 +268,9 @@ with tab2:
                     feedback = call_gemini(eval_prompt, "Sei un coach di comunicazione politica ed ex spin doctor.")
                     st.success("### 📋 Valutazione dello Spin Doctor")
                     st.markdown(feedback)
-                    log_session("Simulatore Dibattito", st.session_state['current_question'], feedback)
-                    st.success("✅ Interazione salvata nello storico!")
+                    if "⚠️ Errore" not in feedback:
+                        log_session("Simulatore Dibattito", st.session_state['current_question'], feedback)
+                        st.success("✅ Interazione salvata nello storico!")
 
 # --- TAB 3: SENTIMENT ELETTORALE CON GRAFICI PLOTLY ---
 with tab3:
@@ -295,46 +299,47 @@ with tab3:
                 st.markdown("### 📝 Report Qualitativo")
                 st.markdown(analysis_result)
 
-                st.markdown("---")
-                st.markdown("### 📊 Dashboard Metriche Elettorali")
+                if "⚠️ Errore" not in analysis_result:
+                    st.markdown("---")
+                    st.markdown("### 📊 Dashboard Metriche Elettorali")
 
-                col_g1, col_g2 = st.columns(2)
+                    col_g1, col_g2 = st.columns(2)
 
-                with col_g1:
-                    sentiment_df = pd.DataFrame({
-                        "Sentiment": ["Positivo", "Neutro", "Negativo"],
-                        "Percentuale": [35, 25, 40]
-                    })
-                    fig_donut = px.pie(
-                        sentiment_df,
-                        values="Percentuale",
-                        names="Sentiment",
-                        title="Distribuzione del Sentiment",
-                        hole=0.4,
-                        color="Sentiment",
-                        color_discrete_map={"Positivo": "#2ecc71", "Neutro": "#f1c40f", "Negativo": "#e74c3c"}
-                    )
-                    fig_donut.update_layout(margin=dict(t=30, b=10, l=10, r=10))
-                    st.plotly_chart(fig_donut, use_container_width=True)
+                    with col_g1:
+                        sentiment_df = pd.DataFrame({
+                            "Sentiment": ["Positivo", "Neutro", "Negativo"],
+                            "Percentuale": [35, 25, 40]
+                        })
+                        fig_donut = px.pie(
+                            sentiment_df,
+                            values="Percentuale",
+                            names="Sentiment",
+                            title="Distribuzione del Sentiment",
+                            hole=0.4,
+                            color="Sentiment",
+                            color_discrete_map={"Positivo": "#2ecc71", "Neutro": "#f1c40f", "Negativo": "#e74c3c"}
+                        )
+                        fig_donut.update_layout(margin=dict(t=30, b=10, l=10, r=10))
+                        st.plotly_chart(fig_donut, use_container_width=True)
 
-                with col_g2:
-                    radar_df = pd.DataFrame({
-                        "Emozione": ["Speranza", "Rabbia", "Fiducia", "Indifferenza", "Frustrazione"],
-                        "Intensità": [65, 80, 50, 30, 75]
-                    })
-                    fig_radar = px.line_polar(
-                        radar_df,
-                        r="Intensità",
-                        theta="Emozione",
-                        line_close=True,
-                        title="Profilo Emotivo dell'Elettorato"
-                    )
-                    fig_radar.update_traces(fill='toself', line_color='#3498db')
-                    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), margin=dict(t=30, b=10, l=10, r=10))
-                    st.plotly_chart(fig_radar, use_container_width=True)
+                    with col_g2:
+                        radar_df = pd.DataFrame({
+                            "Emozione": ["Speranza", "Rabbia", "Fiducia", "Indifferenza", "Frustrazione"],
+                            "Intensità": [65, 80, 50, 30, 75]
+                        })
+                        fig_radar = px.line_polar(
+                            radar_df,
+                            r="Intensità",
+                            theta="Emozione",
+                            line_close=True,
+                            title="Profilo Emotivo dell'Elettorato"
+                        )
+                        fig_radar.update_traces(fill='toself', line_color='#3498db')
+                        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), margin=dict(t=30, b=10, l=10, r=10))
+                        st.plotly_chart(fig_radar, use_container_width=True)
 
-                log_session("Analisi Sentiment & Dashboard", "Analisi batch commenti e metriche", analysis_result)
-                st.success("✅ Interazione e metriche salvate nello storico!")
+                    log_session("Analisi Sentiment & Dashboard", "Analisi batch commenti e metriche", analysis_result)
+                    st.success("✅ Interazione e metriche salvate nello storico!")
 
 # --- TAB 4: CREATORE DI SLOGAN ---
 with tab4:
@@ -357,5 +362,6 @@ with tab4:
             with st.spinner("Creazione slogan in corso..."):
                 slogans = call_gemini(prompt, system_prompt)
                 st.markdown(slogans)
-                log_session("Generatore Slogan", core_values, slogans)
-                st.success("✅ Interazione salvata nello storico!")
+                if "⚠️ Errore" not in slogans:
+                    log_session("Generatore Slogan", core_values, slogans)
+                    st.success("✅ Interazione salvata nello storico!")
